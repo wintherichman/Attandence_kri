@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attendance Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+  :root{
+    --ink:#10241f;
+    --paper:#f4f7f5;
+    --panel:#ffffff;
+    --line:#dfe6e2;
+    --deep:#14332b;
+    --accent:#2f8f6e;
+    --accent-dim:#e4f2ec;
+    --muted:#6b7a75;
+
+    --present:#2f8f6e;
+    --present-dim:#e4f2ec;
+    --absent:#c1443a;
+    --absent-dim:#fbe4e1;
+    --anomaly:#d98c19;
+    --anomaly-dim:#fdf1dc;
+    --off-bg:#eef1ef;
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{
+    font-family:'Prompt', sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    padding:24px;
+  }
+  #app{ max-width:1400px; margin:0 auto; }
+
+  /* ===== Header ===== */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:20px; flex-wrap:wrap; gap:12px;
+  }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-mark{
+    width:42px; height:42px; border-radius:11px;
+    background:var(--deep); color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:16px;
+  }
+  .brand-text .t1{ font-size:19px; font-weight:700; }
+  .brand-text .t2{ font-size:12px; color:var(--muted); }
+  .topbar-right{ display:flex; align-items:center; gap:12px; }
+  .updated-at{ font-size:11px; color:var(--muted); font-family:'IBM Plex Mono',monospace; }
+  .btn-refresh{
+    border:1px solid var(--line); background:var(--panel);
+    border-radius:10px; padding:8px 14px; font-family:'Prompt';
+    font-size:13px; font-weight:500; cursor:pointer; color:var(--ink);
+  }
+  .btn-refresh:hover{ background:var(--accent-dim); border-color:var(--accent); }
+
+  /* ===== Toolbar ===== */
+  .toolbar{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:14px 16px; margin-bottom:18px;
+  }
+  .seg{
+    display:flex; background:var(--paper); border-radius:10px; padding:3px; gap:2px;
+  }
+  .seg button{
+    border:none; background:none; padding:7px 14px; border-radius:8px;
+    font-family:'Prompt'; font-size:13px; font-weight:500; color:var(--muted); cursor:pointer;
+  }
+  .seg button.active{ background:var(--deep); color:#fff; }
+
+  .date-nav{ display:flex; align-items:center; gap:8px; }
+  .date-nav button{
+    width:30px; height:30px; border-radius:8px; border:1px solid var(--line);
+    background:var(--panel); cursor:pointer; font-size:14px; color:var(--ink);
+  }
+  .date-nav button:hover{ background:var(--accent-dim); }
+  .date-label{
+    font-weight:600; font-size:14px; min-width:150px; text-align:center;
+  }
+  .date-nav .today-btn{
+    width:auto; padding:0 10px; font-size:11px; font-family:'IBM Plex Mono',monospace; color:var(--accent);
+  }
+
+  select, .search-input{
+    font-family:'Prompt'; font-size:13px;
+    border:1px solid var(--line); border-radius:8px;
+    padding:7px 10px; background:var(--panel); color:var(--ink);
+  }
+  .search-input{ width:180px; }
+  .toolbar-spacer{ flex:1; }
+
+  /* ===== Stat cards ===== */
+  .stats{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px;
+  }
+  .stat-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:16px 18px;
+  }
+  .stat-num{ font-family:'IBM Plex Mono',monospace; font-size:28px; font-weight:600; }
+  .stat-label{ font-size:12px; color:var(--muted); margin-top:4px; }
+  .stat-card.c-present .stat-num{ color:var(--present); }
+  .stat-card.c-absent .stat-num{ color:var(--absent); }
+  .stat-card.c-anomaly .stat-num{ color:var(--anomaly); }
+
+  /* ===== Center sections ===== */
+  .center-section{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    margin-bottom:18px; overflow:hidden;
+  }
+  .center-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px; border-bottom:1px solid var(--line); background:var(--paper);
+  }
+  .center-head .name{ font-weight:600; font-size:14.5px; }
+  .center-head .count{ font-size:11.5px; color:var(--muted); font-family:'IBM Plex Mono',monospace; }
+
+  .grid-scroll{ overflow-x:auto; }
+  .att-row{
+    display:grid; align-items:center;
+    border-bottom:1px solid var(--line);
+  }
+  .att-row:last-child{ border-bottom:none; }
+  .att-row.head-row{ background:var(--paper); }
+
+  .cell-name{
+    position:sticky; left:0; z-index:2;
+    background:var(--panel);
+    display:flex; align-items:center; gap:10px;
+    padding:10px 14px; border-right:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .head-row .cell-name{ background:var(--paper); }
+  .avatar-mini{
+    width:28px; height:28px; border-radius:50%;
+    background:var(--accent-dim); color:var(--accent);
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700; flex-shrink:0;
+  }
+  .emp-name{ font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; }
+
+  .cell-day{
+    display:flex; align-items:center; justify-content:center;
+    padding:6px 0; position:relative;
+  }
+  .day-head{
+    font-size:10px; color:var(--muted); text-align:center; font-family:'IBM Plex Mono',monospace;
+    line-height:1.3; padding:8px 0;
+  }
+  .day-head .dow{ font-size:9px; }
+  .day-head.weekend{ color:var(--absent); opacity:.6; }
+
+  .status-dot{
+    width:24px; height:24px; border-radius:7px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:700; cursor:default;
+  }
+  .status-dot.present{ background:var(--present-dim); color:var(--present); }
+  .status-dot.offsite{ background:var(--anomaly-dim); color:var(--anomaly); }
+  .status-dot.anomaly{ background:var(--anomaly-dim); color:var(--anomaly); }
+  .status-dot.absent{ background:var(--absent-dim); color:var(--absent); }
+  .status-dot.weekend, .status-dot.future, .status-dot.na{
+    background:var(--off-bg); color:var(--line);
+  }
+  .status-dot[title]:hover{ outline:2px solid var(--ink); outline-offset:1px; }
+
+  .cell-summary{
+    padding:10px 12px; text-align:center; border-left:1px solid var(--line);
+  }
+  .cell-summary .v{ font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13px; }
+  .cell-summary .l{ font-size:9.5px; color:var(--muted); }
+  .cell-summary.anomaly .v{ color:var(--anomaly); }
+
+  /* ===== Day view (list style) ===== */
+  .day-view-row{
+    display:flex; align-items:center; gap:14px;
+    padding:12px 18px; border-bottom:1px solid var(--line);
+  }
+  .day-view-row:last-child{ border-bottom:none; }
+  .dv-badge{
+    font-size:11px; font-weight:600; padding:4px 10px; border-radius:20px; white-space:nowrap;
+  }
+  .dv-badge.present{ background:var(--present-dim); color:var(--present); }
+  .dv-badge.offsite{ background:var(--anomaly-dim); color:var(--anomaly); }
+  .dv-badge.anomaly{ background:var(--anomaly-dim); color:var(--anomaly); }
+  .dv-badge.absent{ background:var(--absent-dim); color:var(--absent); }
+  .dv-badge.weekend, .dv-badge.future{ background:var(--off-bg); color:var(--muted); }
+  .dv-times{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); flex:1; }
+  .dv-hours{ font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; min-width:60px; text-align:right; }
+
+  /* ===== Legend / empty / loading ===== */
+  .legend{
+    display:flex; gap:18px; flex-wrap:wrap; align-items:center;
+    font-size:11.5px; color:var(--muted); padding:14px 4px 4px;
+  }
+  .legend-item{ display:flex; align-items:center; gap:6px; }
+  .legend-dot{ width:16px; height:16px; border-radius:5px; font-size:9px; display:flex; align-items:center; justify-content:center; font-weight:700; }
+
+  .empty-state, .loading-state{
+    text-align:center; padding:60px 20px; color:var(--muted); font-size:13px;
+  }
+
+  /* ===== Print scope modal ===== */
+  .modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(16,36,31,.45);
+    align-items:center; justify-content:center; z-index:50;
+  }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{
+    background:var(--panel); border-radius:14px; padding:22px;
+    width:320px; box-shadow:0 20px 50px rgba(0,0,0,.2);
+  }
+  .modal-title{ font-size:15px; font-weight:700; }
+  .modal-sub{ font-size:12px; color:var(--muted); margin-top:2px; margin-bottom:16px; }
+  .modal-body{ display:flex; flex-direction:column; gap:10px; margin-bottom:18px; }
+  .modal-section-label{ font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .radio-row{ display:flex; align-items:center; gap:8px; font-size:13.5px; cursor:pointer; }
+  #print-center-select{ width:100%; margin-left:24px; }
+  #print-center-select:disabled{ opacity:.5; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:10px; }
+  .btn-plain{
+    border:1px solid var(--line); background:var(--panel); border-radius:8px;
+    padding:8px 16px; font-family:'Prompt'; font-size:13px; cursor:pointer; color:var(--ink);
+  }
+  .btn-primary{
+    border:none; background:var(--deep); color:#fff; border-radius:8px;
+    padding:8px 16px; font-family:'Prompt'; font-size:13px; font-weight:500; cursor:pointer;
+  }
+
+  @media (max-width:1024px){
+    body{ padding:16px; }
+    .stats{ grid-template-columns:repeat(2,1fr); gap:10px; }
+    .stat-card{ padding:12px 14px; }
+    .stat-num{ font-size:22px; }
+    .cell-name{ padding:8px 10px; }
+  }
+
+  @media (max-width:640px){
+    body{ padding:10px; }
+    .brand-mark{ width:36px; height:36px; font-size:14px; border-radius:9px; }
+    .brand-text .t1{ font-size:16px; }
+    .brand-text .t2{ font-size:10.5px; }
+    .topbar{ align-items:flex-start; }
+    .topbar-right{ width:100%; justify-content:space-between; }
+    .updated-at{ display:none; }
+
+    .toolbar{ flex-direction:column; align-items:stretch; padding:12px; gap:10px; }
+    .toolbar-spacer{ display:none; }
+    .seg{ width:100%; }
+    .seg button{ flex:1; padding:8px 6px; font-size:12px; }
+    .date-nav{ justify-content:space-between; width:100%; }
+    .date-label{ min-width:0; flex:1; font-size:13px; }
+    select{ width:100%; }
+
+    .stats{ grid-template-columns:repeat(2,1fr); gap:8px; }
+    .stat-card{ padding:10px 12px; border-radius:10px; }
+    .stat-num{ font-size:19px; }
+    .stat-label{ font-size:10.5px; }
+
+    .center-head{ padding:10px 12px; }
+    .center-head .name{ font-size:13px; }
+    .cell-name{ padding:7px 8px; gap:7px; }
+    .avatar-mini{ width:24px; height:24px; font-size:10px; }
+    .emp-name{ font-size:12px; }
+    .day-head{ font-size:9px; padding:6px 0; }
+    .status-dot{ width:20px; height:20px; font-size:10px; border-radius:6px; }
+    .cell-summary{ padding:7px 6px; }
+    .cell-summary .v{ font-size:11.5px; }
+    .cell-summary .l{ font-size:8.5px; }
+
+    .day-view-row{ flex-wrap:wrap; padding:10px 12px; gap:8px; }
+    .emp-name{ min-width:0 !important; flex:1 1 100%; order:1; }
+    .avatar-mini{ order:0; }
+    .dv-badge{ order:2; }
+    .dv-times{ order:4; flex:1 1 100%; font-size:11px; }
+    .dv-hours{ order:3; min-width:auto; }
+
+    .legend{ font-size:10.5px; gap:10px; }
+    .modal-box{ width:calc(100vw - 32px); max-width:320px; }
+  }
+
+  @media (max-width:380px){
+    .stats{ grid-template-columns:1fr 1fr; }
+    .seg button{ font-size:11px; padding:7px 4px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">A</div>
+      <div class="brand-text">
+        <div class="t1">Attendance Dashboard</div>
+        <div class="t2">ภาพรวมการเข้า-ออกงานทั้งองค์กร</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="updated-at" id="updated-at">–</span>
+      <button class="btn-refresh" onclick="openPrintModal()">พิมพ์รายงาน</button>
+      <button class="btn-refresh" onclick="refreshData()">รีเฟรช</button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="seg" id="view-seg">
+      <button data-mode="day">รายวัน</button>
+      <button data-mode="week">รายสัปดาห์</button>
+      <button data-mode="month" class="active">รายเดือน</button>
+    </div>
+    <div class="date-nav">
+      <button onclick="navigate(-1)">‹</button>
+      <span class="date-label" id="date-label">–</span>
+      <button onclick="navigate(1)">›</button>
+      <button class="today-btn" onclick="goToday()">วันนี้</button>
+    </div>
+    <select id="center-filter" onchange="onCenterChange()">
+      <option value="all">ทุกศูนย์</option>
+    </select>
+    <select id="name-filter" onchange="onNameChange()">
+      <option value="all">ทุกคน</option>
+    </select>
+    <div class="toolbar-spacer"></div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-num" id="stat-total">–</div>
+      <div class="stat-label">พนักงานทั้งหมด</div>
+    </div>
+    <div class="stat-card c-present">
+      <div class="stat-num" id="stat-present">–</div>
+      <div class="stat-label">เข้างานวันนี้</div>
+    </div>
+    <div class="stat-card c-absent">
+      <div class="stat-num" id="stat-absent">–</div>
+      <div class="stat-label">ขาดงานวันนี้</div>
+    </div>
+    <div class="stat-card c-anomaly">
+      <div class="stat-num" id="stat-anomaly">–</div>
+      <div class="stat-label">ผิดปกติ (ช่วงที่ดูอยู่)</div>
+    </div>
+  </div>
+
+  <div id="main-content">
+    <div class="loading-state">กำลังโหลดข้อมูล...</div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:var(--present-dim); color:var(--present);">✓</span> มาทำงานปกติ</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--anomaly-dim); color:var(--anomaly);">!</span> ผิดปกติ / นอกพื้นที่</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--absent-dim); color:var(--absent);">✕</span> ขาดงาน</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--off-bg); color:var(--line);">–</span> วันหยุด / ยังไม่ถึงวัน</div>
+    <div class="legend-item">ชม.รวม แสดงแบบ ชม.นาที เช่น 8.51 = 8 ชม. 51 นาที</div>
+  </div>
+
+  <div class="modal-overlay" id="print-modal">
+    <div class="modal-box">
+      <div class="modal-title">พิมพ์รายงาน</div>
+      <div class="modal-sub" id="print-modal-month">–</div>
+      <div class="modal-body">
+        <div class="modal-section-label">ช่วงเวลา</div>
+        <div class="seg" id="print-period-seg">
+          <button type="button" data-period="day">รายวัน</button>
+          <button type="button" data-period="week">รายสัปดาห์</button>
+          <button type="button" data-period="month" class="active">รายเดือน</button>
+        </div>
+        <div class="modal-section-label" style="margin-top:14px;">ขอบเขต</div>
+        <label class="radio-row">
+          <input type="radio" name="print-scope" value="all" checked onchange="onPrintScopeChange()">
+          ทุกศูนย์
+        </label>
+        <label class="radio-row">
+          <input type="radio" name="print-scope" value="one" onchange="onPrintScopeChange()">
+          เลือกศูนย์
+        </label>
+        <select id="print-center-select" disabled></select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-plain" onclick="closePrintModal()">ยกเลิก</button>
+        <button class="btn-primary" onclick="doPrintReport()">พิมพ์รายงาน</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ====================== CONFIG ====================== */
+const CONFIG = {
+  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbx0vCyB91CSShY3fK5nOFPsKOOJoAS3sL8HRZmqBxr47RLaxdRQKUvFO1kqdcSacVZKAg/exec" // ใช้ URL เดียวกับใน checkin.html
+};
+/* ====================================================== */
+
+let dashboardData = null;
+let employeeIndex = [];
+let viewMode = 'month';
+let currentMonth = ymStr(new Date());
+let selectedDate = ymdStr(new Date());
+let centerFilter = 'all';
+let nameFilter = 'all';
+
+const DOW_TH = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+
+function pad(n){ return String(n).padStart(2,'0'); }
+function ymStr(d){ return d.getFullYear() + '-' + pad(d.getMonth()+1); }
+function ymdStr(d){ return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+function todayStr(){ return ymdStr(new Date()); }
+function parseYmd(s){ const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function isWeekend(d){ const dow = d.getDay(); return dow === 0 || dow === 6; }
+function daysInMonth(ymstr){ const [y,m] = ymstr.split('-').map(Number); return new Date(y, m, 0).getDate(); }
+function addDays(ymdstr, n){ const d = parseYmd(ymdstr); d.setDate(d.getDate()+n); return ymdStr(d); }
+function thaiYear(y){ return y + 543; }
+
+/**
+ * แปลงชั่วโมงทศนิยม (เช่น 8.85) ให้เป็นรูปแบบ ชม.นาที สำหรับแสดงผล (เช่น "8.51" = 8 ชม. 51 นาที)
+ * ใช้ให้ตรงกับรูปแบบเดียวกับหน้า checkin.html เพื่อความสอดคล้องกันทั้งระบบ
+ */
+function formatHM(decimalHours){
+  if(!decimalHours || isNaN(decimalHours)) return '0.00';
+  const totalMinutes = Math.round(decimalHours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return h + '.' + String(m).padStart(2,'0');
+}
+
+async function loadDashboard(monthStr){
+  document.getElementById('main-content').innerHTML = '<div class="loading-state">กำลังโหลดข้อมูล...</div>';
+  try{
+    const url = CONFIG.APPS_SCRIPT_URL + '?action=dashboard&month=' + monthStr + '&_=' + Date.now();
+    const res = await fetch(url, { cache: 'no-store' });
+    const data = await res.json();
+    dashboardData = data;
+    currentMonth = data.month;
+    buildIndexes();
+    populateCenterFilter();
+    populateNameFilter();
+    document.getElementById('updated-at').textContent = 'อัปเดตล่าสุด ' + new Date().toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+    render();
+  } catch(e){
+    document.getElementById('main-content').innerHTML = '<div class="empty-state">โหลดข้อมูลไม่สำเร็จ กรุณาตรวจสอบ APPS_SCRIPT_URL หรือลองรีเฟรชอีกครั้ง</div>';
+  }
+}
+
+function refreshData(){ loadDashboard(currentMonth); }
+
+function buildIndexes(){
+  const map = {};
+  (dashboardData.employees || []).forEach(e => {
+    map[e.userId] = { userId: e.userId, name: e.name || 'ไม่ทราบชื่อ', center: e.center || 'ไม่ระบุศูนย์', recordsByDate: {} };
+  });
+  (dashboardData.records || []).forEach(r => {
+    if(!map[r.userId]){
+      map[r.userId] = { userId: r.userId, name: r.name || 'ไม่ทราบชื่อ', center: r.center || 'ไม่ระบุศูนย์', recordsByDate: {} };
+    }
+    if(!map[r.userId].center || map[r.userId].center === 'ไม่ระบุศูนย์'){
+      if(r.center) map[r.userId].center = r.center;
+    }
+    if(!map[r.userId].recordsByDate[r.date]) map[r.userId].recordsByDate[r.date] = [];
+    map[r.userId].recordsByDate[r.date].push(r);
+  });
+  employeeIndex = Object.values(map).sort((a,b) => a.name.localeCompare(b.name, 'th'));
+}
+
+function populateCenterFilter(){
+  const sel = document.getElementById('center-filter');
+  const current = sel.value || 'all';
+  const centers = [...new Set(employeeIndex.map(e => e.center))].sort((a,b) => a.localeCompare(b,'th'));
+  sel.innerHTML = '<option value="all">ทุกศูนย์</option>' + centers.map(c => `<option value="${c}">${c}</option>`).join('');
+  sel.value = centers.includes(current) ? current : 'all';
+  centerFilter = sel.value;
+}
+
+function populateNameFilter(){
+  const sel = document.getElementById('name-filter');
+  const current = sel.value || 'all';
+  const relevant = employeeIndex
+    .filter(e => centerFilter === 'all' || e.center === centerFilter)
+    .sort((a,b) => a.name.localeCompare(b.name,'th'));
+  sel.innerHTML = '<option value="all">ทุกคน</option>' + relevant.map(e => `<option value="${e.userId}">${e.name}</option>`).join('');
+  sel.value = relevant.some(e => e.userId === current) ? current : 'all';
+  nameFilter = sel.value;
+}
+
+function onCenterChange(){
+  centerFilter = document.getElementById('center-filter').value;
+  populateNameFilter(); // รายชื่อพนักงานจะกรองตามศูนย์ที่เลือกด้วย
+  render();
+}
+
+function onNameChange(){
+  nameFilter = document.getElementById('name-filter').value;
+  render();
+}
+
+function getFilteredEmployees(){
+  return employeeIndex.filter(e => {
+    if(centerFilter !== 'all' && e.center !== centerFilter) return false;
+    if(nameFilter !== 'all' && e.userId !== nameFilter) return false;
+    return true;
+  });
+}
+
+function computeDayStatus(emp, dateStr){
+  const [y,m] = dateStr.split('-');
+  if(y + '-' + m !== currentMonth){
+    return { status: 'na' };
+  }
+  const recs = emp.recordsByDate[dateStr];
+  const dt = parseYmd(dateStr);
+  const weekend = isWeekend(dt);
+  const future = dateStr > todayStr();
+
+  if(!recs || recs.length === 0){
+    if(weekend) return { status: 'weekend' };
+    if(future) return { status: 'future' };
+    return { status: 'absent' };
+  }
+
+  const hasNote = recs.some(r => r.note);
+  const offsite = !hasNote && recs.some(r => r.geoStatus && r.geoStatus !== 'ผ่าน');
+  const hours = recs.filter(r => r.type === 'ออกงาน' && r.workHours)
+                     .reduce((s,r) => s + parseFloat(r.workHours), 0);
+  const checkIns = recs.filter(r => r.type === 'เข้างาน').map(r => r.time).sort();
+  const checkOuts = recs.filter(r => r.type === 'ออกงาน').map(r => r.time).sort();
+  const notes = recs.filter(r => r.note).map(r => r.note);
+
+  let status = 'present';
+  if(hasNote) status = 'anomaly';
+  else if(offsite) status = 'offsite';
+
+  return {
+    status, hours,
+    checkIn: checkIns[0] || null,
+    checkOut: checkOuts[checkOuts.length-1] || null,
+    notes
+  };
+}
+
+function getVisibleDates(){
+  if(viewMode === 'day') return [selectedDate];
+  if(viewMode === 'week'){
+    const dt = parseYmd(selectedDate);
+    const dow = dt.getDay() === 0 ? 7 : dt.getDay(); // จันทร์=1 ... อาทิตย์=7
+    const monday = addDays(selectedDate, 1 - dow);
+    return Array.from({length:7}, (_,i) => addDays(monday, i));
+  }
+  // month
+  const total = daysInMonth(currentMonth);
+  return Array.from({length: total}, (_,i) => currentMonth + '-' + pad(i+1));
+}
+
+function updateDateLabel(){
+  const label = document.getElementById('date-label');
+  if(viewMode === 'month'){
+    const [y,m] = currentMonth.split('-').map(Number);
+    label.textContent = THAI_MONTHS[m-1] + ' ' + thaiYear(y);
+  } else if(viewMode === 'week'){
+    const dates = getVisibleDates();
+    const d1 = parseYmd(dates[0]), d2 = parseYmd(dates[6]);
+    label.textContent = d1.getDate() + ' - ' + d2.getDate() + ' ' + THAI_MONTHS[d2.getMonth()] + ' ' + thaiYear(d2.getFullYear());
+  } else {
+    const d = parseYmd(selectedDate);
+    label.textContent = d.getDate() + ' ' + THAI_MONTHS[d.getMonth()] + ' ' + thaiYear(d.getFullYear()) + ' (' + DOW_TH[d.getDay()] + ')';
+  }
+}
+
+function navigate(dir){
+  if(viewMode === 'month'){
+    const [y,m] = currentMonth.split('-').map(Number);
+    const nd = new Date(y, m-1+dir, 1);
+    const newMonth = ymStr(nd);
+    loadDashboard(newMonth);
+  } else if(viewMode === 'week'){
+    selectedDate = addDays(selectedDate, dir*7);
+    const newMonth = selectedDate.slice(0,7);
+    if(newMonth !== currentMonth) loadDashboard(newMonth); else render();
+  } else {
+    selectedDate = addDays(selectedDate, dir);
+    const newMonth = selectedDate.slice(0,7);
+    if(newMonth !== currentMonth) loadDashboard(newMonth); else render();
+  }
+}
+
+function goToday(){
+  selectedDate = todayStr();
+  const newMonth = todayStr().slice(0,7);
+  if(newMonth !== currentMonth) loadDashboard(newMonth); else render();
+}
+
+document.getElementById('view-seg').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-mode]');
+  if(!btn) return;
+  viewMode = btn.dataset.mode;
+  document.querySelectorAll('#view-seg button').forEach(b => b.classList.toggle('active', b === btn));
+  render();
+});
+
+function render(){
+  updateDateLabel();
+  renderStats();
+  if(viewMode === 'day') renderDayView(); else renderGridView();
+}
+
+function renderStats(){
+  const emps = getFilteredEmployees();
+  const dates = getVisibleDates();
+  const today = todayStr();
+
+  let presentToday = 0, absentToday = 0, anomalyCount = 0;
+  emps.forEach(emp => {
+    const s = computeDayStatus(emp, today);
+    if(s.status === 'present' || s.status === 'anomaly' || s.status === 'offsite') presentToday++;
+    if(s.status === 'absent') absentToday++;
+  });
+  emps.forEach(emp => {
+    dates.forEach(d => {
+      const s = computeDayStatus(emp, d);
+      if(s.status === 'anomaly') anomalyCount++;
+    });
+  });
+
+  document.getElementById('stat-total').textContent = emps.length;
+  document.getElementById('stat-present').textContent = presentToday;
+  document.getElementById('stat-absent').textContent = absentToday;
+  document.getElementById('stat-anomaly').textContent = anomalyCount;
+}
+
+function statusIcon(status){
+  return { present:'✓', offsite:'!', anomaly:'!', absent:'✕', weekend:'–', future:'–', na:'–' }[status] || '–';
+}
+function statusTooltip(emp, dateStr, s){
+  const d = parseYmd(dateStr);
+  const dateLabel = d.getDate() + ' ' + THAI_MONTHS[d.getMonth()];
+  if(s.status === 'present' || s.status === 'anomaly' || s.status === 'offsite'){
+    let t = `${dateLabel}: เข้า ${s.checkIn || '-'} ออก ${s.checkOut || '-'} (${formatHM(s.hours)} ชม.)`;
+    if(s.notes && s.notes.length) t += ' · ' + s.notes.join(', ');
+    return t;
+  }
+  if(s.status === 'absent') return `${dateLabel}: ขาดงาน`;
+  if(s.status === 'weekend') return `${dateLabel}: วันหยุด`;
+  return `${dateLabel}: ไม่มีข้อมูล`;
+}
+
+function renderGridView(){
+  const dates = getVisibleDates();
+  const emps = getFilteredEmployees();
+  const container = document.getElementById('main-content');
+
+  if(emps.length === 0){
+    container.innerHTML = '<div class="empty-state">ไม่พบพนักงานตามเงื่อนไขที่เลือก</div>';
+    return;
+  }
+
+  const isNarrow = window.innerWidth < 640;
+  const isMedium = window.innerWidth >= 640 && window.innerWidth < 1024;
+  const nameColWidth = isNarrow ? 130 : (isMedium ? 170 : 220);
+  const dayColWidth = viewMode === 'month' ? (isNarrow ? 24 : (isMedium ? 28 : 32)) : (isNarrow ? 36 : 46);
+  const summaryColWidth = isNarrow ? 56 : (isMedium ? 68 : 80);
+  const gridTemplate = `${nameColWidth}px repeat(${dates.length}, ${dayColWidth}px) ${summaryColWidth}px ${summaryColWidth}px ${summaryColWidth}px`;
+
+  // จัดกลุ่มตามศูนย์
+  const byCenter = {};
+  emps.forEach(e => { (byCenter[e.center] = byCenter[e.center] || []).push(e); });
+  const centers = Object.keys(byCenter).sort((a,b) => a.localeCompare(b,'th'));
+
+  let html = '';
+  centers.forEach(center => {
+    const list = byCenter[center];
+    html += `<div class="center-section">
+      <div class="center-head"><span class="name">${center}</span><span class="count">${list.length} คน</span></div>
+      <div class="grid-scroll">
+        <div class="att-row head-row" style="grid-template-columns:${gridTemplate}">
+          <div class="cell-name"></div>
+          ${dates.map(d => {
+            const dt = parseYmd(d);
+            const wk = isWeekend(dt);
+            return `<div class="day-head ${wk?'weekend':''}">${dt.getDate()}<br><span class="dow">${DOW_TH[dt.getDay()]}</span></div>`;
+          }).join('')}
+          <div class="cell-summary"><div class="l">วันมา</div></div>
+          <div class="cell-summary"><div class="l">ชม.รวม</div></div>
+          <div class="cell-summary"><div class="l">ผิดปกติ</div></div>
+        </div>`;
+
+    list.forEach(emp => {
+      let daysPresent = 0, totalHours = 0, anomalyCnt = 0;
+      const cells = dates.map(d => {
+        const s = computeDayStatus(emp, d);
+        if(s.status === 'present' || s.status === 'anomaly' || s.status === 'offsite'){
+          daysPresent++; totalHours += (s.hours || 0);
+        }
+        if(s.status === 'anomaly') anomalyCnt++;
+        const tip = statusTooltip(emp, d, s);
+        return `<div class="cell-day"><div class="status-dot ${s.status}" title="${tip}">${statusIcon(s.status)}</div></div>`;
+      }).join('');
+
+      const initials = emp.name.trim().slice(0,1) || '?';
+      html += `<div class="att-row" style="grid-template-columns:${gridTemplate}">
+        <div class="cell-name">
+          <div class="avatar-mini">${initials}</div>
+          <span class="emp-name">${emp.name}</span>
+        </div>
+        ${cells}
+        <div class="cell-summary"><div class="v">${daysPresent}</div></div>
+        <div class="cell-summary"><div class="v">${formatHM(totalHours)}</div></div>
+        <div class="cell-summary ${anomalyCnt>0?'anomaly':''}"><div class="v">${anomalyCnt}</div></div>
+      </div>`;
+    });
+
+    html += `</div></div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function renderDayView(){
+  const emps = getFilteredEmployees();
+  const container = document.getElementById('main-content');
+
+  if(emps.length === 0){
+    container.innerHTML = '<div class="empty-state">ไม่พบพนักงานตามเงื่อนไขที่เลือก</div>';
+    return;
+  }
+
+  const byCenter = {};
+  emps.forEach(e => { (byCenter[e.center] = byCenter[e.center] || []).push(e); });
+  const centers = Object.keys(byCenter).sort((a,b) => a.localeCompare(b,'th'));
+
+  const statusLabel = { present:'มาทำงาน', offsite:'นอกพื้นที่', anomaly:'ผิดปกติ', absent:'ขาดงาน', weekend:'วันหยุด', future:'ยังไม่ถึงวัน', na:'ไม่มีข้อมูล' };
+
+  let html = '';
+  centers.forEach(center => {
+    const list = byCenter[center];
+    html += `<div class="center-section">
+      <div class="center-head"><span class="name">${center}</span><span class="count">${list.length} คน</span></div>`;
+
+    list.forEach(emp => {
+      const s = computeDayStatus(emp, selectedDate);
+      const initials = emp.name.trim().slice(0,1) || '?';
+      const timesText = (s.checkIn || s.checkOut)
+        ? `เข้า ${s.checkIn || '-'}  ·  ออก ${s.checkOut || '-'}`
+        : '—';
+      html += `<div class="day-view-row">
+        <div class="avatar-mini">${initials}</div>
+        <span class="emp-name" style="min-width:160px;">${emp.name}</span>
+        <span class="dv-badge ${s.status}">${statusLabel[s.status]}</span>
+        <span class="dv-times">${timesText}${s.notes && s.notes.length ? ' · ' + s.notes.join(', ') : ''}</span>
+        <span class="dv-hours">${s.hours ? formatHM(s.hours) + ' ชม.' : ''}</span>
+      </div>`;
+    });
+
+    html += `</div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+loadDashboard(currentMonth);
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if(dashboardData) render(); }, 200);
+});
+
+/* ====================== พิมพ์รายงานรายเดือน ====================== */
+
+let printPeriod = 'month';
+
+function getDatesForPeriod(periodMode){
+  if(periodMode === 'day') return [selectedDate];
+  if(periodMode === 'week'){
+    const dt = parseYmd(selectedDate);
+    const dow = dt.getDay() === 0 ? 7 : dt.getDay();
+    const monday = addDays(selectedDate, 1 - dow);
+    return Array.from({length:7}, (_,i) => addDays(monday, i));
+  }
+  const total = daysInMonth(currentMonth);
+  return Array.from({length: total}, (_,i) => currentMonth + '-' + pad(i+1));
+}
+
+function getPeriodLabel(periodMode, dates){
+  if(periodMode === 'day'){
+    const d = parseYmd(dates[0]);
+    return d.getDate() + ' ' + THAI_MONTHS[d.getMonth()] + ' ' + thaiYear(d.getFullYear()) + ' (' + DOW_TH[d.getDay()] + ')';
+  }
+  if(periodMode === 'week'){
+    const d1 = parseYmd(dates[0]), d2 = parseYmd(dates[6]);
+    return d1.getDate() + ' - ' + d2.getDate() + ' ' + THAI_MONTHS[d2.getMonth()] + ' ' + thaiYear(d2.getFullYear());
+  }
+  const [y,m] = currentMonth.split('-').map(Number);
+  return THAI_MONTHS[m-1] + ' ' + thaiYear(y);
+}
+
+function openPrintModal(){
+  printPeriod = (viewMode === 'day' || viewMode === 'week') ? viewMode : 'month';
+  document.querySelectorAll('#print-period-seg button').forEach(b => b.classList.toggle('active', b.dataset.period === printPeriod));
+  updatePrintModalLabel();
+
+  const sel = document.getElementById('print-center-select');
+  const centers = [...new Set(employeeIndex.map(e => e.center))].sort((a,b) => a.localeCompare(b,'th'));
+  sel.innerHTML = centers.map(c => `<option value="${c}">${c}</option>`).join('');
+
+  document.querySelector('input[name="print-scope"][value="all"]').checked = true;
+  sel.disabled = true;
+
+  document.getElementById('print-modal').classList.add('open');
+}
+
+function updatePrintModalLabel(){
+  const dates = getDatesForPeriod(printPeriod);
+  document.getElementById('print-modal-month').textContent = 'ช่วง: ' + getPeriodLabel(printPeriod, dates);
+}
+
+document.getElementById('print-period-seg').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-period]');
+  if(!btn) return;
+  printPeriod = btn.dataset.period;
+  document.querySelectorAll('#print-period-seg button').forEach(b => b.classList.toggle('active', b === btn));
+  updatePrintModalLabel();
+});
+
+function closePrintModal(){
+  document.getElementById('print-modal').classList.remove('open');
+}
+
+function onPrintScopeChange(){
+  const scope = document.querySelector('input[name="print-scope"]:checked').value;
+  document.getElementById('print-center-select').disabled = (scope !== 'one');
+}
+
+function doPrintReport(){
+  const scope = document.querySelector('input[name="print-scope"]:checked').value;
+  const centerName = scope === 'one' ? document.getElementById('print-center-select').value : null;
+  closePrintModal();
+
+  const html = buildReportHTML(scope, centerName, printPeriod);
+  const win = window.open('', '_blank');
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 300); // รอให้ font/layout เรนเดอร์เสร็จก่อนสั่งพิมพ์
+}
+
+function buildReportHTML(scope, centerName, periodMode){
+  const dates = getDatesForPeriod(periodMode);
+  const periodLabel = getPeriodLabel(periodMode, dates);
+
+  let emps = employeeIndex.slice();
+  if(scope === 'one' && centerName) emps = emps.filter(e => e.center === centerName);
+
+  const byCenter = {};
+  emps.forEach(e => { (byCenter[e.center] = byCenter[e.center] || []).push(e); });
+  const centers = Object.keys(byCenter).sort((a,b) => a.localeCompare(b,'th'));
+
+  const statusLabel = { present:'มาทำงาน', offsite:'นอกพื้นที่', anomaly:'ผิดปกติ', absent:'ขาดงาน', weekend:'วันหยุด', future:'ยังไม่ถึงวัน', na:'ไม่มีข้อมูล' };
+  const printSymbol = { present:'✓', offsite:'!', anomaly:'!', absent:'✕', weekend:'-', future:'', na:'' };
+
+  let bodyHtml = '';
+
+  if(periodMode === 'day'){
+    // ===== รายงานรายวัน: ตารางแบบรายชื่อ ไม่ใช่ grid วัน =====
+    centers.forEach(center => {
+      bodyHtml += `<div class="center-title">ศูนย์: ${center} (${byCenter[center].length} คน)</div>`;
+      bodyHtml += `<table><thead><tr><th class="name-col">ชื่อ</th><th>สถานะ</th><th>เข้า</th><th>ออก</th><th>ชม.</th><th class="note-col">หมายเหตุ</th></tr></thead><tbody>`;
+
+      byCenter[center].sort((a,b) => a.name.localeCompare(b.name,'th')).forEach(emp => {
+        const s = computeDayStatus(emp, dates[0]);
+        const cls = s.status === 'anomaly' || s.status === 'offsite' ? 'anom' : (s.status === 'absent' ? 'abs' : '');
+        bodyHtml += `<tr>
+          <td class="name-col">${emp.name}</td>
+          <td class="${cls}">${statusLabel[s.status] || '-'}</td>
+          <td>${s.checkIn || '-'}</td>
+          <td>${s.checkOut || '-'}</td>
+          <td>${s.hours ? formatHM(s.hours) : '-'}</td>
+          <td class="note-col">${s.notes && s.notes.length ? s.notes.join(', ') : '-'}</td>
+        </tr>`;
+      });
+
+      bodyHtml += `</tbody></table>`;
+    });
+  } else {
+    // ===== รายงานรายสัปดาห์ / รายเดือน: ตาราง grid วัน =====
+    const dayHeaders = dates.map(d => {
+      const dt = parseYmd(d);
+      return `<th class="${isWeekend(dt)?'wk':''}">${dt.getDate()}<br><span class="dow">${DOW_TH[dt.getDay()]}</span></th>`;
+    }).join('');
+
+    centers.forEach(center => {
+      bodyHtml += `<div class="center-title">ศูนย์: ${center} (${byCenter[center].length} คน)</div>`;
+      bodyHtml += `<table><thead><tr><th class="name-col">ชื่อ</th>${dayHeaders}<th>วันมา</th><th>ชม.รวม</th><th>ผิดปกติ</th><th class="note-col">หมายเหตุ</th></tr></thead><tbody>`;
+
+      byCenter[center].sort((a,b) => a.name.localeCompare(b.name,'th')).forEach(emp => {
+        let daysPresent = 0, totalHours = 0, anomalyCnt = 0;
+        const noteParts = [];
+
+        const cells = dates.map(d => {
+          const s = computeDayStatus(emp, d);
+          if(s.status === 'present' || s.status === 'anomaly' || s.status === 'offsite'){
+            daysPresent++; totalHours += (s.hours || 0);
+          }
+          if(s.status === 'anomaly'){
+            anomalyCnt++;
+            const dt = parseYmd(d);
+            const dLabel = pad(dt.getDate()) + '/' + pad(dt.getMonth()+1);
+            noteParts.push(`${dLabel} ${s.notes.join(', ')}`);
+          }
+          const cls = s.status === 'weekend' ? 'wk' : (s.status === 'anomaly' || s.status === 'offsite' ? 'anom' : (s.status === 'absent' ? 'abs' : ''));
+          return `<td class="${cls}">${printSymbol[s.status] || ''}</td>`;
+        }).join('');
+
+        bodyHtml += `<tr>
+          <td class="name-col">${emp.name}</td>
+          ${cells}
+          <td>${daysPresent}</td>
+          <td>${formatHM(totalHours)}</td>
+          <td>${anomalyCnt}</td>
+          <td class="note-col">${noteParts.join('; ') || '-'}</td>
+        </tr>`;
+      });
+
+      bodyHtml += `</tbody></table>`;
+    });
+  }
+
+  const periodTypeLabel = { day:'รายวัน', week:'รายสัปดาห์', month:'รายเดือน' }[periodMode];
+
+  return `<!DOCTYPE html>
+<html lang="th"><head><meta charset="UTF-8">
+<title>รายงานการเข้า-ออกงาน ${periodLabel}</title>
+<style>
+  @page { size: A4 ${periodMode === 'day' ? 'portrait' : 'landscape'}; margin: 12mm; }
+  * { box-sizing:border-box; }
+  body{ font-family:'Sarabun','Prompt',sans-serif; color:#10241f; padding:0; margin:0; }
+  .report-header{ margin-bottom:14px; }
+  .report-header h1{ font-size:18px; margin-bottom:2px; }
+  .report-header .sub{ font-size:12px; color:#555; }
+  .center-title{ font-size:13px; font-weight:700; margin:16px 0 6px; }
+  table{ width:100%; border-collapse:collapse; font-size:9.5px; margin-bottom:10px; }
+  th, td{ border:1px solid #ccc; padding:3px 4px; text-align:center; }
+  th{ background:#eef1ef; font-weight:600; font-size:9px; }
+  th.wk, td.wk{ background:#f5f5f5; color:#999; }
+  td.anom{ background:#fdf1dc; color:#b06a10; font-weight:700; }
+  td.abs{ background:#fbe4e1; color:#a83226; font-weight:700; }
+  .name-col{ text-align:left !important; white-space:nowrap; min-width:110px; }
+  .note-col{ text-align:left !important; font-size:8.5px; min-width:140px; }
+  .dow{ font-size:7.5px; }
+  @media print{ .no-print{ display:none; } }
+</style></head>
+<body>
+  <div class="report-header">
+    <h1>รายงานการเข้า-ออกงาน${periodTypeLabel} — ${periodLabel}</h1>
+    <div class="sub">ขอบเขต: ${scope === 'all' ? 'ทุกศูนย์' : 'ศูนย์ ' + centerName} · พิมพ์เมื่อ ${new Date().toLocaleString('th-TH')}</div>
+  </div>
+  ${bodyHtml}
+</body></html>`;
+}
+</script>
+</body>
+</html>
