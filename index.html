@@ -109,6 +109,26 @@
   .stat-card.c-absent .stat-num{ color:var(--absent); }
   .stat-card.c-anomaly .stat-num{ color:var(--anomaly); }
 
+  .stat-card[data-filter]{ cursor:pointer; transition:box-shadow .15s, border-color .15s, transform .1s; user-select:none; }
+  .stat-card[data-filter]:hover{ border-color:var(--accent); transform:translateY(-1px); }
+  .stat-card[data-filter]:active{ transform:translateY(0); }
+  .stat-card.c-present.active{ background:var(--present-dim); border-color:var(--present); box-shadow:0 0 0 1px var(--present) inset; }
+  .stat-card.c-absent.active{ background:var(--absent-dim); border-color:var(--absent); box-shadow:0 0 0 1px var(--absent) inset; }
+  .stat-card.c-anomaly.active{ background:var(--anomaly-dim); border-color:var(--anomaly); box-shadow:0 0 0 1px var(--anomaly) inset; }
+  .stat-card .hint{ font-size:10px; color:var(--muted); margin-top:6px; opacity:.7; }
+
+  /* ===== Active filter bar ===== */
+  .filter-bar{
+    display:none; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--accent-dim); border:1px solid var(--accent); border-radius:12px;
+    padding:10px 16px; margin-bottom:16px; font-size:13px; font-weight:500; color:var(--deep);
+  }
+  .filter-bar button{
+    border:1px solid var(--accent); background:var(--panel); color:var(--deep);
+    border-radius:8px; padding:6px 12px; font-family:'Prompt'; font-size:12px; cursor:pointer;
+  }
+  .filter-bar button:hover{ background:var(--accent); color:#fff; }
+
   /* ===== Center sections ===== */
   .center-section{
     background:var(--panel); border:1px solid var(--line); border-radius:14px;
@@ -331,22 +351,30 @@
   </div>
 
   <div class="stats">
-    <div class="stat-card">
+    <div class="stat-card" id="card-total">
       <div class="stat-num" id="stat-total">–</div>
       <div class="stat-label">พนักงานทั้งหมด</div>
     </div>
-    <div class="stat-card c-present">
+    <div class="stat-card c-present" id="card-present" data-filter="present" onclick="toggleStatusFilter('present')">
       <div class="stat-num" id="stat-present">–</div>
       <div class="stat-label">เข้างานวันนี้</div>
+      <div class="hint">คลิกเพื่อกรอง</div>
     </div>
-    <div class="stat-card c-absent">
+    <div class="stat-card c-absent" id="card-absent" data-filter="absent" onclick="toggleStatusFilter('absent')">
       <div class="stat-num" id="stat-absent">–</div>
       <div class="stat-label">ขาดงานวันนี้</div>
+      <div class="hint">คลิกเพื่อกรอง</div>
     </div>
-    <div class="stat-card c-anomaly">
+    <div class="stat-card c-anomaly" id="card-anomaly" data-filter="anomaly" onclick="toggleStatusFilter('anomaly')">
       <div class="stat-num" id="stat-anomaly">–</div>
       <div class="stat-label">ผิดปกติ (ช่วงที่ดูอยู่)</div>
+      <div class="hint">คลิกเพื่อกรอง</div>
     </div>
+  </div>
+
+  <div class="filter-bar" id="filter-bar">
+    <span id="filter-bar-text"></span>
+    <button onclick="clearStatusFilter()">ล้างตัวกรอง ✕</button>
   </div>
 
   <div id="main-content">
@@ -406,6 +434,13 @@ let currentMonth = ymStr(new Date());
 let selectedDate = ymdStr(new Date());
 let centerFilter = 'all';
 let nameFilter = 'all';
+let statusFilter = 'all'; // 'all' | 'present' | 'absent' | 'anomaly'
+
+const STATUS_FILTER_LABELS = {
+  present: 'เข้างานวันนี้',
+  absent: 'ขาดงานวันนี้',
+  anomaly: 'ผิดปกติ (ช่วงที่ดูอยู่)'
+};
 
 const DOW_TH = ['อา','จ','อ','พ','พฤ','ศ','ส'];
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
@@ -501,10 +536,57 @@ function onNameChange(){
   render();
 }
 
+/* ====================== สถานะรายบุคคล (ใช้กรองจากการ์ดสถิติ) ====================== */
+
+function employeeMatchesStatusFilter(emp){
+  if(statusFilter === 'all') return true;
+
+  if(statusFilter === 'present' || statusFilter === 'absent'){
+    const s = computeDayStatus(emp, todayStr());
+    if(statusFilter === 'present'){
+      return s.status === 'present' || s.status === 'anomaly' || s.status === 'offsite';
+    }
+    return s.status === 'absent';
+  }
+
+  if(statusFilter === 'anomaly'){
+    const dates = getVisibleDates();
+    return dates.some(d => computeDayStatus(emp, d).status === 'anomaly');
+  }
+
+  return true;
+}
+
+function toggleStatusFilter(type){
+  statusFilter = (statusFilter === type) ? 'all' : type;
+  render();
+}
+
+function clearStatusFilter(){
+  statusFilter = 'all';
+  render();
+}
+
+function updateFilterUI(){
+  document.querySelectorAll('.stat-card[data-filter]').forEach(card => {
+    card.classList.toggle('active', card.dataset.filter === statusFilter);
+  });
+
+  const bar = document.getElementById('filter-bar');
+  const text = document.getElementById('filter-bar-text');
+  if(statusFilter === 'all'){
+    bar.style.display = 'none';
+  } else {
+    bar.style.display = 'flex';
+    text.textContent = 'กำลังกรองตาม: ' + STATUS_FILTER_LABELS[statusFilter];
+  }
+}
+
 function getFilteredEmployees(){
   return employeeIndex.filter(e => {
     if(centerFilter !== 'all' && e.center !== centerFilter) return false;
     if(nameFilter !== 'all' && e.userId !== nameFilter) return false;
+    if(!employeeMatchesStatusFilter(e)) return false;
     return true;
   });
 }
@@ -607,6 +689,7 @@ document.getElementById('view-seg').addEventListener('click', (e) => {
 function render(){
   updateDateLabel();
   renderStats();
+  updateFilterUI();
   if(viewMode === 'day') renderDayView(); else renderGridView();
 }
 
